@@ -3,7 +3,7 @@
 Real-time AI-powered drone coordination system for search & rescue operations.
 
 ## Live Demo
-👉 [Open Simulator](https://ТВО-НИК.github.io/drone-rescue-ai/drone-rescue.html)
+👉 [Open Simulator](https://ibengineer.github.io/drone-rescue-ai/drone-rescue.html)
 
 ## Features
 - Claude AI (Haiku) selects optimal rescue drone in real time
