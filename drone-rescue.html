@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRONE RESCUE AI v4.0</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+:root {
+  --bg: #020c12;
+  --panel: #040e18;
+  --border: #0a3a5a;
+  --green: #00ff9d;
+  --cyan: #00d4ff;
+  --red: #ff3f5a;
+  --yellow: #ffd600;
+  --orange: #ff8c00;
+  --purple: #b44fff;
+  --text: #7ecfff;
+  --text-dim: #2a6080;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  height: 100vh; overflow: hidden;
+  background-image:
+    radial-gradient(ellipse at 15% 60%, rgba(0,100,180,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 15%, rgba(0,255,157,0.03) 0%, transparent 50%);
+}
+
+/* ── HEADER ── */
+header {
+  height: 50px;
+  padding: 0 24px;
+  display: flex; align-items: center; gap: 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,15,30,0.9);
+  backdrop-filter: blur(12px);
+  position: relative; z-index: 100;
+  flex-shrink: 0;
+}
+.logo-icon { font-size: 22px; }
+.logo-text {
+  font-family: 'Orbitron', sans-serif; font-size: 16px; font-weight: 900;
+  color: var(--cyan); letter-spacing: 4px;
+  text-shadow: 0 0 18px rgba(0,212,255,0.45);
+}
+.logo-sub { font-size: 11px; color: var(--text-dim); letter-spacing: 3px; margin-top: 1px; }
+.hbar { margin-left: auto; display: flex; gap: 18px; font-size: 12px; color: var(--text-dim); align-items: center; }
+.si { display: flex; align-items: center; gap: 5px; }
+.dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 7px var(--green);
+  animation: blink 2s ease-in-out infinite;
+}
+.dot.warn { background: var(--yellow); box-shadow: 0 0 7px var(--yellow); }
+.dot.red  { background: var(--red);    box-shadow: 0 0 7px var(--red); animation: blink 0.6s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+/* ── MAIN LAYOUT ── */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  height: calc(100vh - 50px);
+}
+
+/* ── MAP ── */
+.map-area {
+  position: relative;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.map-label {
+  position: absolute; top: 12px; left: 16px;
+  font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 3px;
+  color: var(--text-dim); z-index: 10; pointer-events: none;
+}
+/* weather overlay in top-right of map */
+.weather-hud {
+  position: absolute; top: 12px; right: 16px;
+  display: flex; gap: 12px; z-index: 10;
+  font-size: 12px; color: var(--text-dim);
+}
+.whud-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.whud-val { font-size: 17px; color: var(--cyan); }
+.whud-val.danger { color: var(--red); }
+.whud-val.warn   { color: var(--yellow); }
+
+canvas { display: block; width: 100%; height: 100%; }
+.flash {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0,255,157,0.22) 0%, transparent 65%);
+  pointer-events: none; opacity: 0; transition: opacity 0.6s;
+}
+.flash.active { opacity: 1; }
+
+/* ── SIDE PANEL ── */
+.side {
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--panel);
+}
+
+.sec { padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.sec-title {
+  font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 4px;
+  color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase;
+}
+
+/* survivor card */
+.victim-card {
+  background: rgba(255,60,90,0.05); border: 1px solid rgba(255,60,90,0.2);
+  border-radius: 3px; padding: 8px;
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 6px;
+}
+.il { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; }
+.iv { font-size: 14px; color: var(--red); font-weight: bold; }
+.iv.ok { color: var(--green); }
+
+/* weather card */
+.weather-card {
+  background: rgba(0,180,255,0.04); border: 1px solid rgba(0,180,255,0.15);
+  border-radius: 3px; padding: 8px;
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 6px;
+}
+
+/* drone list */
+.drone-list { flex: 1; overflow-y: auto; padding: 10px 16px; }
+.drone-list::-webkit-scrollbar { width: 3px; }
+.drone-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+.dc {
+  background: rgba(0,12,25,0.8); border: 1px solid var(--border);
+  border-radius: 3px; padding: 9px; margin-bottom: 7px;
+  position: relative; overflow: hidden;
+  transition: border-color 0.3s, box-shadow 0.3s, opacity 0.4s;
+}
+.dc::before {
+  content:''; position:absolute; left:0;top:0;bottom:0; width:2px;
+  background: var(--cyan); opacity: 0.3; transition: opacity 0.3s;
+}
+.dc.optimal { border-color: var(--green); background: rgba(0,255,157,0.04); box-shadow: 0 0 18px rgba(0,255,157,0.1); }
+.dc.optimal::before { background: var(--green); opacity: 1; }
+.dc.away { opacity: 0.35; }
+
+.dh { display:flex; justify-content:space-between; align-items:center; margin-bottom:7px; }
+.dn { font-family:'Orbitron',sans-serif; font-size:13px; font-weight:700; }
+
+.badge {
+  font-size: 10px; padding: 2px 7px; border-radius: 2px; letter-spacing: 2px;
+  background: rgba(0,180,255,0.08); border: 1px solid rgba(0,180,255,0.22); color: var(--cyan);
+}
+.badge.opt-badge { background: rgba(0,255,157,0.1); border-color: var(--green); color: var(--green); animation: gp 1.4s ease-in-out infinite; }
+.badge.away-badge { background: rgba(40,40,40,0.2); border-color: #2a2a2a; color: #3a3a3a; }
+@keyframes gp { 0%,100%{box-shadow:0 0 4px rgba(0,255,157,0.15)} 50%{box-shadow:0 0 12px rgba(0,255,157,0.55)} }
+
+.ds { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+.sl { font-size: 9px; color:var(--text-dim); }
+.sv { font-size: 12px; }
+.sbar { margin-top:5px; height:2px; background:var(--border); border-radius:2px; overflow:hidden; }
+.sfill { height:100%; border-radius:2px; background:var(--cyan); transition:width 0.6s; }
+.sfill.best { background:var(--green); }
+
+/* risk badges row */
+.risks { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+.risk-tag {
+  font-size: 10px; padding: 2px 6px; border-radius: 2px;
+  background: rgba(255,140,0,0.12); border: 1px solid rgba(255,140,0,0.3); color: var(--orange);
+}
+.risk-tag.ok { background: rgba(0,255,157,0.08); border-color: rgba(0,255,157,0.25); color: var(--green); }
+.risk-tag.bad { background: rgba(255,60,90,0.1); border-color: rgba(255,60,90,0.3); color: var(--red); }
+
+/* AI reasoning panel */
+.ai-panel {
+  border-top: 1px solid var(--border);
+  background: rgba(0,5,15,0.7);
+  flex-shrink: 0;
+}
+.ai-panel-header {
+  padding: 7px 16px;
+  font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 3px;
+  color: var(--text-dim); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.ai-thinking { display: none; }
+.ai-thinking.active { display: flex; align-items: center; gap: 6px; }
+.think-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: blink 0.5s ease-in-out infinite; }
+.think-dot:nth-child(2){ animation-delay: 0.17s; }
+.think-dot:nth-child(3){ animation-delay: 0.34s; }
+
+.ai-log {
+  padding: 8px 16px;
+  max-height: 140px; overflow-y: auto;
+}
+.ai-log::-webkit-scrollbar { width: 2px; }
+.ai-log::-webkit-scrollbar-thumb { background: var(--border); }
+.ll { font-size: 11px; line-height: 1.85; color: var(--text-dim); animation: fi 0.25s ease; }
+.ll.imp  { color: var(--green); }
+.ll.warn { color: var(--yellow); }
+.ll.crit { color: var(--red); }
+.ll.ai   { color: #a0d8ff; font-size: 11px; border-left: 2px solid rgba(0,180,255,0.3); padding-left: 6px; margin: 2px 0; }
+@keyframes fi { from{opacity:0;transform:translateX(-3px)} to{opacity:1;transform:none} }
+
+/* controls */
+.controls {
+  padding: 12px 16px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 7px; flex-shrink: 0;
+}
+.btn {
+  width:100%; padding:11px; background:transparent;
+  border:1px solid var(--cyan); color:var(--cyan);
+  font-family:'Orbitron',sans-serif; font-size:11px; letter-spacing:3px;
+  cursor:pointer; transition:all 0.2s; border-radius:2px;
+}
+.btn:hover { background:rgba(0,212,255,0.07); box-shadow:0 0 16px rgba(0,212,255,0.15); }
+.btn.primary { background:rgba(0,255,157,0.05); border-color:var(--green); color:var(--green); }
+.btn.primary:hover { background:rgba(0,255,157,0.12); box-shadow:0 0 20px rgba(0,255,157,0.2); }
+.btn:disabled { opacity:0.22; cursor:not-allowed; }
+.btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">🛸</div>
+  <div>
+    <div class="logo-text">DRONE RESCUE AI</div>
+    <div class="logo-sub">SEARCH & RESCUE · CLAUDE HAIKU POWERED · v4.0</div>
+  </div>
+  <div class="hbar">
+    <div class="si"><div class="dot"></div>SCOUT ONLINE</div>
+    <div class="si"><div class="dot warn" id="sigDot"></div><span id="sigLabel">DISTRESS SIGNAL</span></div>
+    <div class="si"><div class="dot"></div>HAIKU API READY</div>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- MAP -->
+  <div class="map-area">
+    <div class="map-label">TACTICAL MAP · FOREST SECTOR-7 · LIVE FEED</div>
+    <div class="weather-hud" id="weatherHud"></div>
+    <canvas id="c"></canvas>
+    <div class="flash" id="flash"></div>
+  </div>
+
+  <!-- SIDE PANEL -->
+  <div class="side">
+
+    <!-- SURVIVOR -->
+    <div class="sec">
+      <div class="sec-title">⚠ SURVIVOR — ACTIVE DISTRESS SIGNAL</div>
+      <div class="victim-card">
+        <div><div class="il">LATITUDE</div><div class="iv" id="vLat">—</div></div>
+        <div><div class="il">LONGITUDE</div><div class="iv" id="vLon">—</div></div>
+        <div><div class="il">STATUS</div><div class="iv" id="vStatus">DISTRESS</div></div>
+        <div><div class="il">SIGNAL</div><div class="iv ok">ACTIVE</div></div>
+      </div>
+    </div>
+
+    <!-- WEATHER -->
+    <div class="sec">
+      <div class="sec-title">🌤 ENVIRONMENTAL CONDITIONS</div>
+      <div class="weather-card" id="weatherCard"></div>
+    </div>
+
+    <!-- DRONES -->
+    <div class="sec-title" style="padding:10px 16px 0;margin:0; flex-shrink:0;">DRONES · FULL TELEMETRY</div>
+    <div class="drone-list" id="droneList"></div>
+
+    <!-- AI LOG -->
+    <div class="ai-panel">
+      <div class="ai-panel-header">
+        🤖 CLAUDE AI REASONING
+        <div class="ai-thinking" id="thinkAnim">
+          <div class="think-dot"></div><div class="think-dot"></div><div class="think-dot"></div>
+          <span style="font-size:7px;color:var(--green)">ANALYZING...</span>
+        </div>
+      </div>
+      <div class="ai-log" id="aiLog">
+        <div class="ll">[SYSTEM] All modules online. Ready for AI analysis.</div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="controls">
+      <button class="btn primary" id="analyzeBtn" onclick="runAnalysis()">⬡ RUN CLAUDE AI ANALYSIS</button>
+      <div class="btn-row">
+        <button class="btn" id="dispatchBtn" onclick="doDispatch()" disabled>▶ DISPATCH</button>
+        <button class="btn" onclick="init()">↻ NEW SCENARIO</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+const COLORS = ['#00d4ff','#ffd600','#ff7a00','#c44fff','#ff3f5a'];
+const NAMES  = ['AQUA-1','AQUA-2','AQUA-3','AQUA-4','AQUA-5'];
+const DRONE_TYPES = ['Quadcopter','Hexacopter','Fixed-wing','Quadcopter','Hexacopter'];
+const IP_RATINGS  = ['IP43','IP54','IP67','IP43','IP54'];
+
+let W, H;
+let victim, scout, drones, weather, terrain;
+let optimalIdx = -1;
+let phase = 'idle'; // idle | analysing | ready | dispatched | arrived
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function rand(a,b){ return Math.random()*(b-a)+a; }
+function randInt(a,b){ return Math.floor(rand(a,b)); }
+function randChoice(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+function init(){
+  phase = 'idle';
+  optimalIdx = -1;
+  document.getElementById('analyzeBtn').disabled = false;
+  document.getElementById('analyzeBtn').textContent = '⬡ RUN CLAUDE AI ANALYSIS';
+  document.getElementById('dispatchBtn').disabled = true;
+  document.getElementById('flash').classList.remove('active');
+  document.getElementById('thinkAnim').classList.remove('active');
+  document.getElementById('vStatus').textContent = 'DISTRESS';
+  document.getElementById('vStatus').className = 'iv';
+  document.getElementById('sigDot').className = 'dot warn';
+  document.getElementById('sigLabel').textContent = 'DISTRESS SIGNAL';
+
+  W = canvas.width; H = canvas.height;
+  const m = 85;
+
+  // survivor
+  victim = {
+    x: rand(W*0.28, W*0.72),
+    y: rand(H*0.28, H*0.72),
+    lat: '55.751999',
+    lon: '37.617734',
+    condition: randChoice(['Hypothermia','Dehydration','Injury','Exhaustion','Unknown']),
+    signalStrength: randInt(40,100),
+    timeInField: randInt(1,18) + 'h',
+  };
+
+  // scout — smooth fixed-wing patrol
+  const scoutAngle = rand(0, Math.PI*2);
+  const scoutSpd   = 0.55;
+  scout = {
+    x:    rand(m, W-m),
+    y:    rand(m, H/2),
+    vx:   Math.cos(scoutAngle) * scoutSpd,
+    vy:   Math.sin(scoutAngle) * scoutSpd,
+    angle: scoutAngle,        // smoothed display angle
+    turnRate: 0,              // current turning momentum
+  };
+
+  // weather — set placeholder, then fetch real data
+  weather = defaultWeather();
+  fetchRealWeather(victim.lat, victim.lon);
+
+  // terrain
+  terrain = {
+    type: 'Dense Forest',
+    treeHeight:    randInt(15,35),   // m — obstacle for landing
+    clearingNear:  Math.random() > 0.4,
+    elevation:     randInt(100,800), // m above sea level
+    slope:         randInt(0,40),    // degrees
+    riverNearby:   Math.random() > 0.6,
+  };
+
+  // drones — spread evenly across 5 map zones to avoid clustering
+  // Divide map into 5 sectors, place one drone per sector
+  const zones = [
+    [m,       W*0.4,  m,       H*0.45],   // top-left
+    [W*0.6,   W-m,    m,       H*0.45],   // top-right
+    [m,       W*0.4,  H*0.55,  H-m  ],    // bottom-left
+    [W*0.6,   W-m,    H*0.55,  H-m  ],    // bottom-right
+    [W*0.25,  W*0.75, H*0.2,   H*0.8],    // center
+  ];
+  drones = NAMES.map((name,i) => {
+    const z = zones[i];
+    const x = rand(z[0], z[1]);
+    const y = rand(z[2], z[3]);
+    const speed    = randInt(40,120);
+    const battery  = randInt(15,100);
+    const alt      = randInt(50,500);
+    const water    = randInt(1,12);
+    const maxRange = randInt(8,25);      // km
+    const payload  = randInt(1,5);       // kg max
+    const ipRating = IP_RATINGS[i];
+    const type     = DRONE_TYPES[i];
+    const tempMin  = randInt(-20,0);     // min operating temp °C
+    const windMax  = randInt(20,45);     // max wind the drone handles
+    const angle    = rand(0, Math.PI*2);
+    const spd      = rand(0.5,1.5);
+    const dx = x - victim.x, dy = y - victim.y;
+    const dist2d   = Math.sqrt(dx*dx+dy*dy);
+    const distReal = (dist2d / Math.min(W,H) * 15 + alt/1000).toFixed(2);
+
+    return {
+      name, x, y, color: COLORS[i], type,
+      vx: Math.cos(angle)*spd, vy: Math.sin(angle)*spd,
+      speed, battery, alt, water,
+      maxRange, payload, ipRating, tempMin, windMax,
+      distReal: parseFloat(distReal),
+      mode: 'wander',
+      targetX: null, targetY: null,
+      trail: [], arrived: false,
+      personalSpace: rand(55, 120),  // random desired distance from other drones (px)
+      heading: rand(0, Math.PI*2),   // smooth heading angle
+      turnMom: 0,                    // turning momentum
+    };
+  });
+
+  document.getElementById('vLat').textContent = victim.lat;
+  document.getElementById('vLon').textContent = victim.lon;
+
+  renderWeather();
+  renderWeatherHud();
+  renderList();
+  clearLog();
+  addLog('[SYSTEM] New scenario loaded. All sensors active.', '');
+  addLog(`[SURVIVOR] ${victim.lat}°N, ${victim.lon}°E · Condition: ${victim.condition}`, 'warn');
+  addLog(`[WEATHER] Wind ${weather.windSpeed}km/h ${weather.windDir} · Temp ${weather.temperature}°C · Visibility ${weather.visibility}km`, weather.windSpeed>20||weather.temperature<0?'warn':'');
+  if(weather.thunderstorm) addLog('[⚡ ALERT] Thunderstorm detected! High-risk conditions.', 'crit');
+  if(weather.rain) addLog('[🌧 ALERT] Rain active. Check IP ratings before dispatch.', 'warn');
+}
+
+// ─── DEFAULT (FALLBACK) WEATHER ──────────────────────────────────────────────
+function defaultWeather(){
+  const windDir = randChoice(['N','NE','E','SE','S','SW','W','NW']);
+  const windSpd = randInt(0, 20);
+  return {
+    temperature:  randInt(5, 25),
+    humidity:     randInt(40, 80),
+    windSpeed:    windSpd,
+    windDir:      windDir,
+    windGusts:    windSpd + randInt(0,8),
+    visibility:   randInt(3, 10),
+    pressure:     randInt(1000, 1030),
+    rain:         false,
+    thunderstorm: false,
+    foggy:        false,
+    timeOfDay:    'Day',
+    source:       'estimated',
+  };
+}
+
+// ─── REAL WEATHER via wttr.in (CORS-friendly JSON API) ───────────────────────
+async function fetchRealWeather(lat, lon){
+  addLog('[WEATHER] Fetching real-time data...', '');
+  let success = false;
+
+  // Attempt 1: wttr.in — supports CORS from any origin including file://
+  try {
+    const url = `https://wttr.in/${lat},${lon}?format=j1`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    const c    = data.current_condition[0];
+
+    const windDeg = parseInt(c.winddirDegree);
+    const dirs    = ['N','NE','E','SE','S','SW','W','NW'];
+    const windDir = dirs[Math.round(windDeg / 45) % 8];
+
+    const hour      = new Date().getHours();
+    const timeOfDay = hour < 6 ? 'Night' : hour < 9 ? 'Dawn'
+                    : hour < 18 ? 'Day'  : hour < 21 ? 'Dusk' : 'Night';
+
+    const desc    = (c.weatherDesc[0]?.value || '').toLowerCase();
+    const isRain  = desc.includes('rain') || desc.includes('drizzle') || desc.includes('shower');
+    const isSnow  = desc.includes('snow') || desc.includes('blizzard') || desc.includes('sleet');
+    const isFog   = desc.includes('fog') || desc.includes('mist');
+    const isThund = desc.includes('thunder') || desc.includes('storm');
+
+    weather = {
+      temperature:  parseInt(c.temp_C),
+      humidity:     parseInt(c.humidity),
+      windSpeed:    parseInt(c.windspeedKmph),
+      windDir:      windDir,
+      windGusts:    Math.round(parseInt(c.windspeedKmph) * 1.4),
+      visibility:   Math.min(10, parseFloat(c.visibility)),
+      pressure:     parseInt(c.pressure),
+      rain:         isRain || isSnow,
+      thunderstorm: isThund,
+      foggy:        isFog,
+      timeOfDay:    timeOfDay,
+      source:       'live · wttr.in',
+    };
+    success = true;
+
+  } catch(e1) {
+
+    // Attempt 2: Open-Meteo
+    try {
+      const url2 = `https://api.open-meteo.com/v1/forecast`
+        + `?latitude=${lat}&longitude=${lon}`
+        + `&current=temperature_2m,relative_humidity_2m,precipitation,weather_code`
+        + `,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility`
+        + `&wind_speed_unit=kmh&timezone=auto`;
+
+      const res2  = await fetch(url2);
+      const data2 = await res2.json();
+      const c2    = data2.current;
+
+      const deg2    = c2.wind_direction_10m;
+      const dirs2   = ['N','NE','E','SE','S','SW','W','NW'];
+      const windDir2 = dirs2[Math.round(deg2 / 45) % 8];
+      const wc      = c2.weather_code;
+      const hour2   = new Date().getHours();
+
+      weather = {
+        temperature:  Math.round(c2.temperature_2m),
+        humidity:     c2.relative_humidity_2m,
+        windSpeed:    Math.round(c2.wind_speed_10m),
+        windDir:      windDir2,
+        windGusts:    Math.round(c2.wind_gusts_10m),
+        visibility:   Math.min(10, Math.round(c2.visibility / 100) / 10),
+        pressure:     Math.round(c2.surface_pressure),
+        rain:         (wc >= 51 && wc <= 82),
+        thunderstorm: wc >= 95,
+        foggy:        wc >= 45 && wc <= 48,
+        timeOfDay:    hour2 < 6 ? 'Night' : hour2 < 18 ? 'Day' : 'Dusk',
+        source:       'live · open-meteo',
+      };
+      success = true;
+
+    } catch(e2) {
+      // Both APIs failed — use hardcoded fallback
+      addLog('[WEATHER] APIs unavailable. Loading cached data for 55.751999,37.617734...', 'warn');
+      weather = {
+        temperature:  6,
+        humidity:     63,
+        windSpeed:    8,
+        windDir:      'W',
+        windGusts:    15,
+        visibility:   10,
+        pressure:     1001,
+        rain:         false,
+        thunderstorm: false,
+        foggy:        false,
+        timeOfDay:    'Day',
+        source:       'cached · 55.751999,37.617734',
+      };
+    }
+  }
+
+  renderWeather();
+  renderWeatherHud();
+
+  const src = weather.source.startsWith('live') ? 'imp' : 'warn';
+  addLog(`[WEATHER] ${weather.source.startsWith('live') ? '✓' : '📦'} ${weather.source}: ${weather.temperature}°C · Wind ${weather.windSpeed}km/h ${weather.windDir} · Humidity ${weather.humidity}%`, src);
+  if(weather.thunderstorm) addLog('[⚡ ALERT] Thunderstorm detected! High-risk conditions.', 'crit');
+  if(weather.rain)         addLog('[🌧 ALERT] Rain active. Check IP ratings before dispatch.', 'warn');
+  if(weather.foggy)        addLog('[🌫 ALERT] Fog detected. Low visibility conditions.', 'warn');
+}
+
+// ─── RENDER WEATHER PANEL ────────────────────────────────────────────────────────
+function renderWeather(){
+  const w = weather;
+  const warnTemp  = w.temperature < 0 || w.temperature > 30;
+  const warnWind  = w.windSpeed > 20;
+  const warnVis   = w.visibility < 3;
+  const warnRain  = w.rain;
+
+  document.getElementById('weatherCard').innerHTML = `
+    <div>
+      <div class="il">TEMP</div>
+      <div class="iv ${warnTemp?'':'ok'}" style="${warnTemp?'color:var(--yellow)':''}">${w.temperature}°C</div>
+    </div>
+    <div>
+      <div class="il">HUMIDITY</div>
+      <div class="iv" style="color:var(--cyan)">${w.humidity}%</div>
+    </div>
+    <div>
+      <div class="il">WIND</div>
+      <div class="iv ${warnWind?'':'ok'}" style="${warnWind?'color:var(--red)':''}">${w.windSpeed}km/h</div>
+    </div>
+    <div>
+      <div class="il">GUSTS</div>
+      <div class="iv" style="color:${w.windGusts>25?'var(--red)':'var(--yellow)'}">${w.windGusts}km/h</div>
+    </div>
+    <div>
+      <div class="il">DIRECTION</div>
+      <div class="iv" style="color:var(--cyan)">${w.windDir}</div>
+    </div>
+    <div>
+      <div class="il">VISIBILITY</div>
+      <div class="iv ${warnVis?'':'ok'}" style="${warnVis?'color:var(--red)':''}">${w.visibility}km</div>
+    </div>
+    <div>
+      <div class="il">PRESSURE</div>
+      <div class="iv" style="color:var(--text)">${w.pressure}hPa</div>
+    </div>
+    <div>
+      <div class="il">CONDITIONS</div>
+      <div class="iv" style="color:${w.thunderstorm?'var(--red)':w.rain?'var(--yellow)':'var(--green)'};font-size:10px">${
+        w.thunderstorm?'⚡STORM':w.rain?'🌧RAIN':w.foggy?'🌫FOG':'☀CLEAR'
+      }</div>
+    </div>
+  `;
+}
+
+function renderWeatherHud(){
+  const w = weather;
+  document.getElementById('weatherHud').innerHTML = `
+    <div class="whud-item">
+      <div class="whud-val ${w.windSpeed>20?'danger':w.windSpeed>12?'warn':''}">${w.windSpeed}</div>
+      <div>km/h</div>
+    </div>
+    <div class="whud-item">
+      <div class="whud-val ${w.temperature<0?'danger':''}">${w.temperature}°</div>
+      <div>temp</div>
+    </div>
+    <div class="whud-item">
+      <div class="whud-val ${w.visibility<3?'danger':''}">${w.visibility}</div>
+      <div>vis km</div>
+    </div>
+    <div class="whud-item">
+      <div class="whud-val">${w.timeOfDay.slice(0,3).toUpperCase()}</div>
+      <div>time</div>
+    </div>
+  `;
+}
+
+// ─── RISK TAGS ────────────────────────────────────────────────────────────────
+function getRiskTags(d){
+  const tags = [];
+  const w = weather;
+
+  if(w.windSpeed >= d.windMax)
+    tags.push({label:`WIND LIMIT`, cls:'bad'});
+  else if(w.windSpeed > d.windMax * 0.75)
+    tags.push({label:`WIND RISK`, cls:''});
+  else
+    tags.push({label:`WIND OK`, cls:'ok'});
+
+  if(w.temperature < d.tempMin)
+    tags.push({label:`COLD LIMIT`, cls:'bad'});
+  else if(w.temperature < d.tempMin + 10)
+    tags.push({label:`LOW TEMP`, cls:''});
+
+  if(w.rain && !['IP54','IP67'].includes(d.ipRating))
+    tags.push({label:`RAIN RISK`, cls:'bad'});
+  else if(w.rain)
+    tags.push({label:`RAIN OK`, cls:'ok'});
+
+  if(d.battery < 30) tags.push({label:`LOW BATT`, cls:'bad'});
+  if(w.thunderstorm) tags.push({label:`STORM!`, cls:'bad'});
+  if(w.visibility < 3 && d.type !== 'Fixed-wing') tags.push({label:`LOW VIS`, cls:''});
+
+  return tags;
+}
+
+// ─── RENDER DRONE LIST ────────────────────────────────────────────────────────
+function renderList(){
+  const list = document.getElementById('droneList');
+  list.innerHTML = '';
+
+  // sort: optimal first, then by battery desc
+  const order = drones.map((d,i)=>({d,i}))
+    .sort((a,b)=> {
+      if(optimalIdx>=0){
+        if(a.i===optimalIdx) return -1;
+        if(b.i===optimalIdx) return 1;
+      }
+      return b.d.battery - a.d.battery;
+    });
+
+  order.forEach(({d,i})=>{
+    const isOpt  = phase!=='idle' && i===optimalIdx;
+    const isAway = (phase==='dispatched'||phase==='arrived') && d.mode==='away';
+    const tags   = getRiskTags(d);
+
+    const card = document.createElement('div');
+    card.className = 'dc' + (isOpt?' optimal':'') + (isAway?' away':'');
+    card.innerHTML = `
+      <div class="dh">
+        <div class="dn" style="color:${isAway?'#334':d.color}">${d.name}
+          <span style="font-size:8px;color:var(--text-dim);font-family:Share Tech Mono,monospace"> · ${d.type}</span>
+        </div>
+        <div class="badge ${isOpt?'opt-badge':''} ${isAway?'away-badge':''}">${
+          isOpt ? '★ OPTIMAL' : isAway ? 'DEPARTING' : 'STANDBY'
+        }</div>
+      </div>
+      <div class="ds">
+        <div><div class="sl">DIST.</div><div class="sv">${d.distReal}km</div></div>
+        <div><div class="sl">SPEED</div><div class="sv">${d.speed}km/h</div></div>
+        <div><div class="sl">ALT.</div><div class="sv">${d.alt}m</div></div>
+        <div><div class="sl">RANGE</div><div class="sv">${d.maxRange}km</div></div>
+        <div><div class="sl">BATT.</div>
+          <div class="sv" style="color:${d.battery<30?'var(--red)':d.battery<50?'var(--yellow)':'var(--green)'}">${d.battery}%</div>
+        </div>
+        <div><div class="sl">LOAD</div><div class="sv">${d.water}kg</div></div>
+        <div><div class="sl">IP</div><div class="sv" style="color:var(--text-dim)">${d.ipRating}</div></div>
+        <div><div class="sl">MAX WIND</div><div class="sv" style="color:${weather.windSpeed>=d.windMax?'var(--red)':'inherit'}">${d.windMax}km/h</div></div>
+      </div>
+      <div class="risks">${tags.map(t=>`<span class="risk-tag ${t.cls}">${t.label}</span>`).join('')}</div>
+      <div class="sbar"><div class="sfill ${isOpt?'best':''}" style="width:${Math.max(5,(d.battery/100)*100)}%"></div></div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+// ─── CLAUDE AI ANALYSIS ──────────────────────────────────────────────────────
+async function runAnalysis(){
+  if(phase !== 'idle') return;
+  phase = 'analysing';
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('thinkAnim').classList.add('active');
+
+  const _analysisStart = performance.now();
+
+  addLog('[AI] Preparing data package for Claude analysis...', '');
+  addLog('[AI] Compiling: drone telemetry + weather + terrain + survivor data...', '');
+
+  // Build the prompt with ALL real factors
+  const prompt = buildPrompt();
+
+  addLog('[AI] Sending to Claude API — awaiting reasoning...', 'warn');
+
+  try {
+    const fetchPromise = fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        system: `Rescue AI. Pick best drone. Output ONLY JSON: {"optimal_drone":"AQUA-X","reason":"1 sentence","risks":["r1"],"eta_minutes":5,"confidence":80,"warnings":[]}`,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('TIMEOUT_8S')), 8000)
+    );
+
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
+    const data = await response.json();
+    document.getElementById('thinkAnim').classList.remove('active');
+
+    if(data.error){
+      addLog(`[ERROR] API: ${data.error.message}`, 'crit');
+      addLog('[FALLBACK] Switching to local algorithm...', 'warn');
+      fallbackAnalysis();
+      return;
+    }
+
+    // Parse Claude's response
+    const text = data.content.map(c=>c.text||'').join('');
+    let result;
+    try {
+      const clean = text.replace(/```json|```/g,'').trim();
+      result = JSON.parse(clean);
+    } catch(e) {
+      addLog('[PARSE ERROR] Could not parse JSON response.', 'crit');
+      addLog('[FALLBACK] Switching to local algorithm...', 'warn');
+      fallbackAnalysis();
+      return;
+    }
+
+    // Find the drone index
+    const idx = drones.findIndex(d => d.name === result.optimal_drone);
+    optimalIdx = idx >= 0 ? idx : 0;
+
+    // Display Claude's reasoning in the log
+    addLog('─────────────────────────────────', '');
+    addLog(`[CLAUDE] OPTIMAL DRONE: ${result.optimal_drone}`, 'imp');
+    addLog(`[CLAUDE] ${result.reason}`, 'ai');
+
+    if(result.warnings && result.warnings.length){
+      result.warnings.forEach(w => addLog(`[⚠ WARNING] ${w}`, 'warn'));
+    }
+    if(result.risks && result.risks.length){
+      result.risks.forEach(r => addLog(`[RISK] ${r}`, ''));
+    }
+
+    addLog(`[CLAUDE] ETA: ~${result.eta_minutes} min · Confidence: ${result.confidence}%`, 'imp');
+    const _ms = (performance.now() - _analysisStart).toFixed(0);
+    addLog(`[TIMING] Analysis completed in ${_ms}ms (${(_ms/1000).toFixed(2)}s)`, 'imp');
+    addLog('─────────────────────────────────', '');
+
+    phase = 'ready';
+    renderList();
+    document.getElementById('dispatchBtn').disabled = false;
+
+  } catch(err) {
+    document.getElementById('thinkAnim').classList.remove('active');
+    const _ms2 = (performance.now() - _analysisStart).toFixed(0);
+    if(err.message === 'TIMEOUT_8S'){
+      addLog(`[TIMEOUT] API did not respond in 8s — switching to local algorithm.`, 'warn');
+    } else {
+      addLog(`[NETWORK ERROR] ${err.message}`, 'crit');
+    }
+    addLog(`[TIMING] Failed after ${_ms2}ms`, 'warn');
+    addLog('[FALLBACK] Switching to local algorithm...', 'warn');
+    fallbackAnalysis();
+  }
+}
+
+function buildPrompt(){
+  const w = weather;
+  const dd = drones.map(d => [
+    d.name,
+    d.distReal + 'km',
+    d.speed + 'kmh',
+    d.battery + '%',
+    d.maxRange + 'km_range',
+    d.ipRating,
+    d.windMax + 'km_windmax',
+    w.windSpeed >= d.windMax ? 'WIND_EXCEED' : 'ok',
+    d.distReal > d.maxRange ? 'OUT_OF_RANGE' : 'in_range',
+  ].join(','));
+
+  return `Survivor:${victim.condition},${victim.timeInField}. Weather:${w.temperature}C,wind${w.windSpeed}km/h${w.windDir},gusts${w.windGusts},vis${w.visibility}km,rain:${w.rain},storm:${w.thunderstorm}. Drones:\n${dd.join('\n')}\nPick best. JSON only.`;
+}
+
+// ─── FALLBACK: local algorithm ────────────────────────────────────────────────
+function fallbackAnalysis(){
+  const w = weather;
+  const scores = drones.map((d,i) => {
+    if(d.distReal > d.maxRange) return Infinity;         // can't reach
+    if(w.windSpeed >= d.windMax) return Infinity;        // unsafe
+    if(w.thunderstorm) return Infinity;                   // storm abort
+
+    const timeMin   = d.distReal / (d.speed/60);
+    const battPen   = d.battery < 30 ? 2.0 : d.battery < 50 ? 1.3 : 1.0;
+    const altPen    = 1 + d.alt/2000;
+    const coldPen   = w.temperature < d.tempMin ? 2.0 : w.temperature < d.tempMin+10 ? 1.25 : 1.0;
+    const rainPen   = w.rain && !['IP54','IP67'].includes(d.ipRating) ? 1.5 : 1.0;
+    const windPen   = 1 + (w.windSpeed / d.windMax) * 0.4;
+    return timeMin * battPen * altPen * coldPen * rainPen * windPen;
+  });
+
+  const minScore = Math.min(...scores.filter(s=>s!==Infinity));
+  if(minScore === Infinity){
+    addLog('[FALLBACK] ALL DRONES UNSAFE — abort recommended!', 'crit');
+    phase = 'idle';
+    document.getElementById('analyzeBtn').disabled = false;
+    return;
+  }
+
+  optimalIdx = scores.indexOf(minScore);
+  const w2 = drones[optimalIdx];
+  addLog(`[FALLBACK] OPTIMAL: ${w2.name} (local algorithm)`, 'imp');
+  addLog(`[FALLBACK] Score: ${minScore.toFixed(2)} · Dist: ${w2.distReal}km`, '');
+  phase = 'ready';
+  renderList();
+  document.getElementById('dispatchBtn').disabled = false;
+}
+
+// ─── DISPATCH ─────────────────────────────────────────────────────────────────
+function doDispatch(){
+  if(phase !== 'ready') return;
+  phase = 'dispatched';
+  document.getElementById('dispatchBtn').disabled = true;
+
+  drones.forEach((d,i)=>{
+    d.trail = [];
+    if(i === optimalIdx){
+      d.mode    = 'rescue';
+      d.targetX = victim.x;
+      d.targetY = victim.y;
+      addLog(`[DISPATCH] ${d.name} → FLYING TO SURVIVOR!`, 'crit');
+      addLog(`[CARGO] ${d.water}kg load · ${d.type} · IP:${d.ipRating}`, '');
+    } else {
+      d.mode = 'away';
+      const angle = rand(0, Math.PI*2);
+      d.targetX = d.x + Math.cos(angle) * Math.max(W,H) * 1.6;
+      d.targetY = d.y + Math.sin(angle) * Math.max(W,H) * 1.6;
+    }
+  });
+  addLog('[OTHERS] 4 drones returning to standby positions.', 'warn');
+  renderList();
+}
+
+// ─── PHYSICS ─────────────────────────────────────────────────────────────────
+function updateScout(){
+  const SPEED   = 0.60;    // constant speed — like a real plane
+  const MARGIN  = 120;     // turn before reaching edge
+
+  // Gradually change turn rate (smooth, not jittery)
+  scout.turnRate += rand(-0.003, 0.003);
+  scout.turnRate  = Math.max(-0.018, Math.min(0.018, scout.turnRate));
+
+  // Boundary avoidance — gently steer away from edges
+  if(scout.x < MARGIN)        scout.turnRate -= 0.004;
+  if(scout.x > W - MARGIN)    scout.turnRate += 0.004;
+  if(scout.y < MARGIN)        scout.turnRate -= 0.004;
+  if(scout.y > H*0.6-MARGIN)  scout.turnRate += 0.004;
+
+  // Apply turn to heading angle
+  scout.angle += scout.turnRate;
+
+  // Move at constant speed in current heading direction
+  scout.vx = Math.cos(scout.angle) * SPEED;
+  scout.vy = Math.sin(scout.angle) * SPEED;
+
+  scout.x += scout.vx;
+  scout.y += scout.vy;
+
+  // Hard clamp
+  if(scout.x < 30)     { scout.x = 30;     scout.angle = 0; }
+  if(scout.x > W - 30) { scout.x = W - 30; scout.angle = Math.PI; }
+  if(scout.y < 30)     { scout.y = 30;     scout.angle = Math.PI/2; }
+  if(scout.y > H*0.6)  { scout.y = H*0.6;  scout.angle = -Math.PI/2; }
+}
+
+function updateDrones(){
+  // Wind effect vector
+  const windRad   = {'N':270,'NE':225,'E':180,'SE':135,'S':90,'SW':45,'W':0,'NW':315}[weather.windDir] * Math.PI/180;
+  const windForce = weather.windSpeed / 3000;
+  const wdx = Math.cos(windRad) * windForce;
+  const wdy = Math.sin(windRad) * windForce;
+
+  // ── Separation: push drones apart so they never overlap ───────────────────
+  for(let i = 0; i < drones.length; i++){
+    const a = drones[i];
+    if(a.arrived || a.mode === 'away') continue;
+    for(let j = i + 1; j < drones.length; j++){
+      const b = drones[j];
+      if(b.arrived || b.mode === 'away') continue;
+
+      const dx   = a.x - b.x;
+      const dy   = a.y - b.y;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 0.001;
+      // desired gap = average of each drone's personal radius
+      const minGap = (a.personalSpace + b.personalSpace) * 0.5;
+
+      if(dist < minGap){
+        const strength = (minGap - dist) / minGap * 0.20;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        a.vx += nx * strength;
+        a.vy += ny * strength;
+        b.vx -= nx * strength;
+        b.vy -= ny * strength;
+      }
+    }
+  }
+
+  drones.forEach((d)=>{
+    if(d.arrived) return;
+
+    if(d.mode === 'wander'){
+      const DRONE_SPEED = 0.28;
+      const MARGIN = 110;
+
+      // Slowly drift the heading angle — very rare tiny turns
+      if(!d.heading) d.heading = Math.atan2(d.vy, d.vx);
+      if(!d.turnMom) d.turnMom = 0;
+
+      // Change turn momentum very rarely and very slightly
+      d.turnMom += rand(-0.0008, 0.0008);
+      d.turnMom  = Math.max(-0.012, Math.min(0.012, d.turnMom));
+
+      // Boundary avoidance — smooth steering away from edges
+      if(d.x < MARGIN)   d.turnMom -= 0.003;
+      if(d.x > W-MARGIN) d.turnMom += 0.003;
+      if(d.y < MARGIN)   d.turnMom -= 0.003;
+      if(d.y > H-MARGIN) d.turnMom += 0.003;
+
+      d.heading += d.turnMom;
+
+      // Constant slow speed, direction from heading
+      d.vx = Math.cos(d.heading) * DRONE_SPEED;
+      d.vy = Math.sin(d.heading) * DRONE_SPEED;
+
+      // Hard clamp
+      if(d.x < 40) { d.x = 40; d.heading = 0; d.turnMom = 0; }
+      if(d.x > W-40) { d.x = W-40; d.heading = Math.PI; d.turnMom = 0; }
+      if(d.y < 40) { d.y = 40; d.heading = Math.PI/2; d.turnMom = 0; }
+      if(d.y > H-40) { d.y = H-40; d.heading = -Math.PI/2; d.turnMom = 0; }
+
+    } else {
+      const dx   = d.targetX - d.x;
+      const dy   = d.targetY - d.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+
+      // rescue drone faster than departing ones
+      const maxSpd = d.mode === 'rescue' ? 1.6 : 1.0;
+      const accel  = d.mode === 'rescue' ? 0.12 : 0.07;
+
+      if(dist > 5){
+        d.vx += (dx/dist) * accel + wdx;
+        d.vy += (dy/dist) * accel + wdy;
+        const spd = Math.sqrt(d.vx*d.vx + d.vy*d.vy);
+        if(spd > maxSpd){ d.vx *= maxSpd/spd; d.vy *= maxSpd/spd; }
+      } else if(d.mode === 'rescue'){
+        d.x = victim.x; d.y = victim.y;
+        d.vx = 0; d.vy = 0; d.arrived = true;
+        if(phase === 'dispatched'){
+          phase = 'arrived';
+          document.getElementById('vStatus').textContent = 'RESCUED';
+          document.getElementById('vStatus').className   = 'iv ok';
+          document.getElementById('sigDot').className    = 'dot';
+          document.getElementById('sigLabel').textContent = 'SURVIVOR SAFE';
+          addLog(`[✓ ARRIVED] ${d.name} delivered ${d.water}kg load! Life saved! 🎉`, 'imp');
+          document.getElementById('flash').classList.add('active');
+          setTimeout(()=>document.getElementById('flash').classList.remove('active'), 1500);
+          renderList();
+        }
+        return;
+      }
+    }
+
+    d.x += d.vx;
+    d.y += d.vy;
+    d.trail.push({x: d.x, y: d.y});
+    if(d.trail.length > 85) d.trail.shift();
+
+    // Recalculate live distance to victim
+    if(victim && !d.arrived){
+      const dx2 = d.x - victim.x;
+      const dy2 = d.y - victim.y;
+      const pxDist = Math.sqrt(dx2*dx2 + dy2*dy2);
+      d.distReal = parseFloat((pxDist / Math.min(W, H) * 15 + d.alt/1000).toFixed(2));
+    }
+  });
+}
+
+// ─── DRAW ─────────────────────────────────────────────────────────────────────
+function drawFrame(){
+  W=canvas.width; H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  // grid
+  ctx.strokeStyle='rgba(0,65,115,0.12)'; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // forest
+  for(let i=0;i<120;i++){
+    const tx=(Math.sin(i*131.3+5)*0.5+0.5)*W;
+    const ty=(Math.sin(i*317.9+5)*0.5+0.5)*H;
+    const r=9+Math.sin(i*7)*5;
+    ctx.beginPath(); ctx.arc(tx,ty,r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(0,${52+Math.floor(Math.sin(i)*16)},${15+Math.floor(Math.cos(i)*8)},0.2)`;
+    ctx.fill();
+  }
+
+  // rain overlay
+  if(weather && weather.rain){
+    for(let i=0;i<60;i++){
+      const rx=(Math.sin(i*73.1+Date.now()/800)*0.5+0.5)*W;
+      const ry=((Date.now()/500 + i*30)%H);
+      ctx.strokeStyle='rgba(100,180,255,0.12)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(rx,ry); ctx.lineTo(rx+3,ry+10); ctx.stroke();
+    }
+  }
+
+  if(!victim) return;
+  const now=Date.now()/1000;
+
+  // wind arrows on map
+  if(weather){
+    const windRad={'N':270,'NE':225,'E':180,'SE':135,'S':90,'SW':45,'W':0,'NW':315}[weather.windDir]*Math.PI/180;
+    ctx.save();
+    ctx.strokeStyle=`rgba(100,200,255,${Math.min(0.35, weather.windSpeed/100)})`;
+    ctx.lineWidth=1;
+    for(let r=0;r<3;r++){
+      const ox=W*0.15+r*(W*0.35), oy=H*0.85;
+      ctx.beginPath();
+      ctx.moveTo(ox,oy);
+      ctx.lineTo(ox+Math.cos(windRad)*30*weather.windSpeed/35, oy+Math.sin(windRad)*30*weather.windSpeed/35);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // scout lines — brighter
+  drones.forEach(d=>{
+    ctx.strokeStyle=d.mode==='away'?`${d.color}18`:`${d.color}45`;
+    ctx.lineWidth=1.2; ctx.setLineDash([4,7]);
+    ctx.beginPath(); ctx.moveTo(scout.x,scout.y); ctx.lineTo(d.x,d.y); ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // optimal line to victim
+  if((phase==='dispatched'||phase==='arrived')&&optimalIdx>=0){
+    const d=drones[optimalIdx];
+    ctx.strokeStyle=`${d.color}50`; ctx.lineWidth=1.5; ctx.setLineDash([6,5]);
+    ctx.beginPath(); ctx.moveTo(d.x,d.y); ctx.lineTo(victim.x,victim.y); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // trails
+  drones.forEach(d=>{
+    if(d.trail.length<2) return;
+    for(let j=1;j<d.trail.length;j++){
+      const a=(j/d.trail.length)*0.48;
+      ctx.strokeStyle=d.color+Math.floor(a*255).toString(16).padStart(2,'0');
+      ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(d.trail[j-1].x,d.trail[j-1].y); ctx.lineTo(d.trail[j].x,d.trail[j].y); ctx.stroke();
+    }
+  });
+
+  // drones
+  drones.forEach((d,i)=>{
+    if(d.mode==='away'&&(d.x<-50||d.x>W+50||d.y<-50||d.y>H+50)) return;
+    const isOpt=i===optimalIdx&&phase!=='idle';
+    const isAway=d.mode==='away';
+
+    if(isOpt&&!isAway){
+      const pulse=(1+Math.sin(now*3))*0.5;
+      ctx.beginPath(); ctx.arc(d.x,d.y,26,0,Math.PI*2);
+      ctx.strokeStyle=d.color+Math.floor((0.3+pulse*0.6)*255).toString(16).padStart(2,'0');
+      ctx.lineWidth=1.5; ctx.stroke();
+    }
+
+    // ── Draw quadcopter silhouette ────────────────────────────────────────────
+    ctx.save();
+    ctx.translate(d.x, d.y);
+    // rotate toward velocity direction
+    ctx.rotate(Math.atan2(d.vy, d.vx) + Math.PI/4);
+
+    if(d.arrived){
+      // water drop icon when arrived
+      ctx.font='18px serif'; ctx.textAlign='center'; ctx.fillStyle='#00d4ff';
+      ctx.fillText('💧', 0, 6);
+    } else {
+      const col  = isAway ? '#1e3040' : d.color;
+      const colD = isAway ? '#0a1520' : (d.color + '99');
+      const s    = isOpt  ? 1.25 : 1.0;   // optimal drone slightly larger
+
+      ctx.scale(s, s);
+
+      // — 4 arms diagonal —
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = 2;
+      const armLen = 10;
+      [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([ax,ay])=>{
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(ax*armLen, ay*armLen);
+        ctx.stroke();
+      });
+
+      // — central body —
+      ctx.fillStyle = isOpt ? col : colD;
+      ctx.beginPath();
+      ctx.rect(-4, -4, 8, 8);
+      ctx.fill();
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // — 4 rotors at arm tips —
+      const rotorR = 5.5;
+      const rotorSpin = now * 15; // spinning angle
+      [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([ax,ay], ri)=>{
+        const cx2 = ax * armLen;
+        const cy2 = ay * armLen;
+        // rotor circle
+        ctx.beginPath();
+        ctx.arc(cx2, cy2, rotorR, 0, Math.PI*2);
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        // rotor blades — two crossing lines spinning
+        const a1 = rotorSpin + ri * Math.PI/2;
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.5;
+        for(let b=0; b<2; b++){
+          const ba = a1 + b * Math.PI/2;
+          ctx.beginPath();
+          ctx.moveTo(cx2 + Math.cos(ba)*rotorR*0.85, cy2 + Math.sin(ba)*rotorR*0.85);
+          ctx.lineTo(cx2 - Math.cos(ba)*rotorR*0.85, cy2 - Math.sin(ba)*rotorR*0.85);
+          ctx.stroke();
+        }
+      });
+
+      // — tiny camera dot below body —
+      ctx.beginPath();
+      ctx.arc(0, 3, 1.5, 0, Math.PI*2);
+      ctx.fillStyle = isOpt ? '#fff' : col;
+      ctx.fill();
+    }
+
+    ctx.restore();
+
+    ctx.textAlign='center';
+    ctx.fillStyle=isAway?'#1e2e3e':d.color;
+    ctx.font=`${isOpt?'bold ':''}12px Share Tech Mono`;
+    ctx.fillText(d.name,d.x,d.y+26);
+    if(!isAway){
+      ctx.fillStyle='rgba(180,210,255,0.45)'; ctx.font='10px Share Tech Mono';
+      ctx.fillText(`${d.alt}m · ${d.battery}%`,d.x,d.y+39);
+    }
+  });
+
+  // victim
+  const {x:vx,y:vy}=victim;
+  const ring=(1+Math.sin(now*2.5))*0.5;
+  ctx.beginPath(); ctx.arc(vx,vy,28+ring*12,0,Math.PI*2);
+  ctx.strokeStyle=phase==='arrived'?`rgba(0,255,157,${0.2+ring*0.35})`:`rgba(255,60,90,${0.2+ring*0.3})`;
+  ctx.lineWidth=2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(vx,vy,10,0,Math.PI*2);
+  ctx.fillStyle=phase==='arrived'?'rgba(0,255,157,0.9)':'rgba(255,60,90,0.9)';
+  ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 13px Share Tech Mono'; ctx.textAlign='center';
+  ctx.fillText(phase==='arrived'?'OK':'SOS',vx,vy+5);
+  ctx.fillStyle=phase==='arrived'?'var(--green)':'rgba(255,60,90,0.8)';
+  ctx.font='11px Share Tech Mono';
+  ctx.fillText(phase==='arrived'?'RESCUED':'SURVIVOR',vx,vy+30);
+
+  // scout — Predator/MQ-1 style UAV silhouette
+  ctx.save();
+  ctx.translate(scout.x, scout.y);
+  ctx.rotate(scout.angle + Math.PI / 2); // nose points forward
+
+  const col = '#00ff9d';
+  ctx.fillStyle   = col;
+  ctx.strokeStyle = col;
+  ctx.shadowColor = col;
+  ctx.shadowBlur  = 10;
+  ctx.lineJoin    = 'round';
+  ctx.lineCap     = 'round';
+
+  // ── FUSELAGE — long slender body ──
+  ctx.beginPath();
+  ctx.moveTo(0, -24);    // nose tip
+  ctx.bezierCurveTo( 3, -18,  3,  8,  2, 14);  // right side
+  ctx.lineTo(1.5, 18);
+  ctx.lineTo(-1.5, 18);
+  ctx.lineTo(-2, 14);
+  ctx.bezierCurveTo(-3,  8, -3, -18, 0, -24);  // left side
+  ctx.closePath();
+  ctx.fill();
+
+  // ── NOSE BULGE (sensor pod) ──
+  ctx.beginPath();
+  ctx.ellipse(0, -21, 3, 4, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // ── MAIN WINGS — long straight, slightly swept ──
+  ctx.beginPath();
+  ctx.moveTo(-2,  -2);   // wing root left
+  ctx.lineTo(-28,  6);   // left wingtip leading edge
+  ctx.lineTo(-26, 10);   // left wingtip trailing
+  ctx.lineTo( -2,  4);   // root trailing left
+  ctx.lineTo(  2,  4);   // root trailing right
+  ctx.lineTo( 26, 10);   // right wingtip trailing
+  ctx.lineTo( 28,  6);   // right wingtip leading
+  ctx.lineTo(  2, -2);   // wing root right
+  ctx.closePath();
+  ctx.fill();
+
+  // ── TAIL BOOM — slightly wider at base ──
+  ctx.beginPath();
+  ctx.moveTo(-1.5, 18);
+  ctx.lineTo(-2,   26);
+  ctx.lineTo( 2,   26);
+  ctx.lineTo( 1.5, 18);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── HORIZONTAL STABILIZERS (rear small wings) ──
+  ctx.beginPath();
+  ctx.moveTo(-1.5, 22);
+  ctx.lineTo(-12,  27);
+  ctx.lineTo(-11,  29);
+  ctx.lineTo( -1,  24);
+  ctx.lineTo(  1,  24);
+  ctx.lineTo( 11,  29);
+  ctx.lineTo( 12,  27);
+  ctx.lineTo( 1.5, 22);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── TAIL FIN (dorsal, inverted V) ──
+  ctx.beginPath();
+  ctx.ellipse(0, 26, 2, 4, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // ── ENGINE INTAKE — small circle on belly ──
+  ctx.beginPath();
+  ctx.arc(0, 6, 3, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,20,15,0.8)';
+  ctx.fill();
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  // SCOUT label above
+  ctx.fillStyle   = '#00ff9d';
+  ctx.font        = 'bold 11px Share Tech Mono';
+  ctx.textAlign   = 'center';
+  ctx.shadowColor = '#00ff9d';
+  ctx.shadowBlur  = 6;
+  ctx.fillText('SCOUT', scout.x, scout.y - 34);
+  ctx.shadowBlur  = 0;
+  ctx.textAlign   = 'left';
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function addLog(msg,type=''){
+  const el=document.getElementById('aiLog');
+  const line=document.createElement('div');
+  line.className='ll'+(type?' '+type:'');
+  line.textContent=`${new Date().toTimeString().slice(0,8)} ${msg}`;
+  el.appendChild(line);
+  el.scrollTop=el.scrollHeight;
+}
+
+function clearLog(){
+  document.getElementById('aiLog').innerHTML='';
+}
+
+// ─── MAIN LOOP ────────────────────────────────────────────────────────────────
+let _frameCount = 0;
+function loop(){
+  updateScout();
+  updateDrones();
+  drawFrame();
+  // Refresh drone list panel every 20 frames (~3x/sec) to show live distances
+  _frameCount++;
+  if(_frameCount % 20 === 0) renderList();
+  requestAnimationFrame(loop);
+}
+
+function resizeCanvas(){
+  const a=canvas.parentElement;
+  canvas.width=a.clientWidth;
+  canvas.height=a.clientHeight;
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+init();
+loop();
+</script>
+</body>
+</html>
